@@ -1,74 +1,97 @@
 # Licensed under the MIT license
 # http://opensource.org/licenses/mit-license.php
 
-# Copyright 2013, Hartmut Goebel <h.goebel@crazy-compilers.com>
+# Copyright 2007, Philippe Normand <philippe@fluendo.com>
 
+from coherence.extern.log import log as externlog
+from coherence.extern.log.log import *
 import os
-import logging
-from logging import *
 
-LOG_FORMAT =('%(levelname)s %-27(category)s '
-             '%(asctime)s %(message)s '
-             '(%(filename)s:%(lineno))')
+def human2level(levelname):
+    levelname = levelname.lower()
+    if levelname.startswith('none'):
+        return 0
+    if levelname.startswith('error'):
+        return 1
+    if levelname.startswith('warn'):
+        return 2
+    if levelname.startswith('info'):
+        return 3
+    if levelname.startswith('debug'):
+        return 4
+    return 5
 
-ENV_VAR_NAME = 'COHERENCE_DEBUG'
-
-
-class Loggable(logging.Logger):
+def customStderrHandler(level, object, category, file, line, message):
     """
-    Base class for objects that want to be able to log messages with
-    different level of severity.  The levels are, in order from least
-    to most: log, debug, info, warning, error.
+    A log handler that writes to stderr.
 
-    @cvar logCategory: Implementors can provide a category to log their
-       messages under.
+    @type level:    string
+    @type object:   string (or None)
+    @type category: string
+    @type message:  string
     """
+    if not isinstance(message, basestring):
+        message = str(message)
 
-    logCategory = 'default'
+    if isinstance(message, unicode):
+        message = message.encode('utf-8')
 
-    def logObjectName(self):
-        """Overridable object name function."""
-        # cheat pychecker
-        for name in ['logName', 'name']:
-            if hasattr(self, name):
-                return getattr(self, name)
+    message = "".join(message.splitlines())
+    where = "(%s:%d)" % (file, line)
 
-        return None
+    formatted_level = getFormattedLevelName(level)
+    formatted_time = time.strftime("%b %d %H:%M:%S")
+    formatted = '%s %-27s %-15s ' % (formatted_level, category,
+                                     formatted_time)
 
-    def log(self, message, *args, **kwargs):
-        logging.getLogger(self.logCategory).log(message, *args, **kwargs)
+    safeprintf(sys.stderr, formatted)
+    safeprintf(sys.stderr, ' %s %s\n', message, where)
 
-    def warning(self, message, *args, **kwargs):
-        logging.getLogger(self.logCategory).warning(message, *args, **kwargs)
+    sys.stderr.flush()
 
-    def info(self, message, *args, **kwargs):
-        logging.getLogger(self.logCategory).info(message, *args, **kwargs)
+def init(logfile=None,loglevel='*:2'):
+    externlog.init('COHERENCE_DEBUG', True)
+    externlog.setPackageScrubList('coherence', 'twisted')
 
-    def critical(self, message, *args, **kwargs):
-        logging.getLogger(self.logCategory).critical(message, *args, **kwargs)
+    if logfile is not None:
+        outputToFiles(stdout=None, stderr=logfile)
 
-    def debug(self, message, *args, **kwargs):
-        logging.getLogger(self.logCategory).debug(message, *args, **kwargs)
+    # log WARNINGS by default
+    if not os.getenv('COHERENCE_DEBUG'):
+        if loglevel.lower() != 'none':
+            setDebug(loglevel)
 
-    def error(self, message, *args, **kwargs):
-        logging.getLogger(self.logCategory).error(message, *args, **kwargs)
+    if externlog.stderrHandler in externlog._log_handlers_limited:
+        externlog.removeLimitedLogHandler(externlog.stderrHandler)
+        if os.getenv('COHERENCE_DEBUG') or loglevel.lower() != 'none':
+            "print addLimitedLogHandler(customStderrHandler)"
+            externlog.addLimitedLogHandler(customStderrHandler)
 
-    def exception(self, message, *args, **kwargs):
-        logging.getLogger(self.logCategory).exception(message, *args, **kwargs)
+def set_debug(loglevel):
+    setDebug(loglevel)
 
-    fatal = critical
-    warn = warning
-    msg = info
+def show_levels():
+    print externlog._categories
 
+# Make Loggable a new-style object
+class Loggable(externlog.Loggable, object):
 
-def init(logfilename=None, loglevel=logging.WARN):
-    logger = logging.getLogger()
-    logging.addLevelName(100, 'NONE')
+    def logFunction(self, *args):
+        if len(args) > 1:
+            format = args[0]
+            arguments = args[1:]
+            try:
+                format % arguments
+            except TypeError:
+                format += " ".join(["%r" for i in arguments])
+            args = (format,) + arguments
+        return args
 
-    logging.basicConfig(filename=logfilename, level=loglevel,
-                        format=LOG_FORMAT)
+    def critical(self, msg, *args):
+        self.warning(msg, *args)
 
-    if ENV_VAR_NAME in os.environ:
-        logger.setLevel(os.environ[envVarName])
-    else:
-        logger.setLevel(loglevel)
+    #def error(self, msg, *args):
+    #    self.log(msg, *args)
+
+    def msg(self, message, *args):
+        self.info(message, *args)
