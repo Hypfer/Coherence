@@ -19,15 +19,19 @@
 import os
 import time
 
+import json
+import thread
+import time
 
 import mimetypes
 
-import pygtk
-pygtk.require("2.0")
+import re
 
 from urllib import unquote
 
-from gi.repository import Caja, GObject, Gio, Gtk
+from datetime import datetime, timedelta
+
+from gi.repository import Caja, GObject, Gio, Gtk, GLib
 
 import dbus
 from dbus.mainloop.glib import DBusGMainLoop
@@ -50,7 +54,7 @@ class DLNAControllerWindow(Gtk.Window):
 
         self.set_default_size(500,200)
         #Gtk.Box in GTK3
-        table = Gtk.Table(2, 2, True)
+        table = Gtk.Table(3, 2, True)
         self.add(table)
 
         self.button1 = Gtk.Button(label="Pause")
@@ -64,10 +68,14 @@ class DLNAControllerWindow(Gtk.Window):
 
         self.label1 = Gtk.Label(str(file))
         table.attach(self.label1, 0, 2, 0, 1)
-        
-        #self.set_title(str(self.svc.action('get_transport_info','')))
-        print "Test!"
-        print str(self.svc.action('get_transport_info',''))
+
+        self.progressbar = Gtk.ProgressBar()
+        table.attach(self.progressbar, 0, 2, 2, 3)        
+        #self.progressbar.set_fraction(0.0)
+        self.grace_period = 30
+
+        GLib.timeout_add_seconds(1, self.checkprogress)
+
 
     def on_button1_clicked(self, widget):
 
@@ -83,7 +91,45 @@ class DLNAControllerWindow(Gtk.Window):
 
     def on_button2_clicked(self, widget):
         self.svc.action('stop','')
+        self.grace_period = 0
         self.destroy()
+
+    def checkprogress(self):
+
+        position_info = self.svc.action('get_position_info', '')
+        position = datetime.strptime(str(position_info.items()[0][1]),"%H:%M:%S")
+        track = str(position_info.items()[1][1])
+        duration = datetime.strptime(str(position_info.items()[2][1]),"%H:%M:%S")
+        delta_time = duration - position
+
+
+        h, m, s = re.match(r'(\d+):(\d+):(\d+)', str(position_info.items()[2][1])).groups()
+        totalseconds = timedelta(hours=int(h), minutes=int(m), seconds=int(s)).total_seconds()
+        #Don't devide by 0
+        if totalseconds == 0.0:
+            percent = 1
+        else:
+            percent = delta_time.total_seconds() / totalseconds
+
+        self.progressbar.set_fraction(1 - percent)
+
+        if self.grace_period != 0:
+            if str(position_info.items()[2][1]) == '00:00:00':
+                print "We will wait " + str(self.grace_period) + " seconds"
+                self.grace_period -= 1
+                return True
+            else:
+                return True
+        else:
+            return False
+
+
+    def on_delete_event(event, self, widget):
+        print("Closed")
+        self.grace_period = 0
+        Gtk.main_quit()
+        return False
+
 
 
 class CoherencePlayExtension(Caja.MenuProvider, GObject.GObject):
@@ -130,7 +176,7 @@ class CoherencePlayExtension(Caja.MenuProvider, GObject.GObject):
             print device['friendly_name'],device['device_type']
             if device['device_type'].split(':')[3] == 'MediaRenderer':
                 if i == 0:
-                    menuitem = Caja.MenuItem(name='CoherencePlayExtension::Play', label='Play on MediaRenderer', tip='Play the selected file(s) on a DLNA/UPnP MediaRenderer')
+                    menuitem = Caja.MenuItem(name='CoherencePlayExtension::Play', label='Play on MediaRenderer', tip='Play the selected file on a DLNA/UPnP MediaRenderer')
                     submenu = Caja.Menu()
                     menuitem.set_submenu(submenu)
 
@@ -150,6 +196,7 @@ class CoherencePlayExtension(Caja.MenuProvider, GObject.GObject):
 
     def play(self,menu,service,uuid,files,fname):
         print "play",uuid,service,files
+        #LIAR LIAR! It only takes the first file.
         file = unquote(files[0].get_uri()[7:])
 
         file = os.path.abspath(file)
@@ -165,6 +212,6 @@ class CoherencePlayExtension(Caja.MenuProvider, GObject.GObject):
         s.action('set_av_transport_uri',{'current_uri':uri})
         s.action('play','')
         win = DLNAControllerWindow(s,fname, file)
-        win.connect("delete-event", Gtk.main_quit)
+        win.connect("delete-event", win.on_delete_event)
         win.show_all()
         Gtk.main()
