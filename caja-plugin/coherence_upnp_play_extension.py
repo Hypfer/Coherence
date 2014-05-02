@@ -40,25 +40,30 @@ OBJECT_PATH = '/org/Coherence'
 
 class DLNAControllerWindow(Gtk.Window):
 
-    def __init__(self, svc, fname):
+    def __init__(self, svc, fname, file):
         Gtk.Window.__init__(self, title=fname)
         
         #the "s" device
+        self.file = "Now Playing"
         self.svc = svc
+        self.file = file
 
         self.set_default_size(500,200)
         #Gtk.Box in GTK3
-        self.box = Gtk.HBox(spacing=6)
-        self.add(self.box)
+        table = Gtk.Table(2, 2, True)
+        self.add(table)
 
         self.button1 = Gtk.Button(label="Pause")
         self.button1.connect("clicked", self.on_button1_clicked)
-        self.box.pack_start(self.button1, True, True, 0)
+        table.attach(self.button1, 0, 1, 1, 2)
 
         self.button2 = Gtk.Button(label="Stop")
         self.button2.connect("clicked", self.on_button2_clicked)
-        self.box.pack_start(self.button2, True, True, 0)
+        table.attach(self.button2, 1, 2, 1, 2)
         self.playing = True
+
+        self.label1 = Gtk.Label(str(file))
+        table.attach(self.label1, 0, 2, 0, 1)
         
         #self.set_title(str(self.svc.action('get_transport_info','')))
         print "Test!"
@@ -145,16 +150,12 @@ class CoherencePlayExtension(Caja.MenuProvider, GObject.GObject):
 
     def play(self,menu,service,uuid,files,fname):
         print "play",uuid,service,files
-        #pin = self.coherence.get_pin('Caja::MediaServer::%d'%os.getpid())
-        #if pin == 'Coherence::Pin::None':
-        #    return
         file = unquote(files[0].get_uri()[7:])
+
         file = os.path.abspath(file)
 
         uri = self.coherence.create_oob(file)
 
-        #result = self.coherence.call_plugin(pin,'get_url_by_name',{'name':file})
-        #print 'result', result
         print uri
 
         s = self.bus.get_object(BUS_NAME+'.service',service)
@@ -163,7 +164,7 @@ class CoherencePlayExtension(Caja.MenuProvider, GObject.GObject):
         s.action('stop','')
         s.action('set_av_transport_uri',{'current_uri':uri})
         s.action('play','')
-        win = DLNAControllerWindow(s,fname)
+        win = DLNAControllerWindow(s,fname, file)
         win.connect("delete-event", Gtk.main_quit)
         win.show_all()
         Gtk.main()
