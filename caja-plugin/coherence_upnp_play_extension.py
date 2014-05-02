@@ -35,39 +35,47 @@ import dbus.service
 BUS_NAME = 'org.Coherence'
 OBJECT_PATH = '/org/Coherence'
 
-class DLNAControllerWindow(Gtk.Window,):
+class DLNAControllerWindow(Gtk.Window):
 
-    def __init__(self, svc):
-        Gtk.Window.__init__(self, title=svc)
+    def __init__(self, svc, fname):
+        Gtk.Window.__init__(self, title=fname)
         
         #the "s" device
         self.svc = svc
 
-
+        self.set_default_size(500,200)
         #Gtk.Box in GTK3
         self.box = Gtk.HBox(spacing=6)
         self.add(self.box)
 
-        self.button1 = Gtk.Button(label="Play")
+        self.button1 = Gtk.Button(label="Pause")
         self.button1.connect("clicked", self.on_button1_clicked)
         self.box.pack_start(self.button1, True, True, 0)
 
-        self.button2 = Gtk.Button(label="Pause")
+        self.button2 = Gtk.Button(label="Stop")
         self.button2.connect("clicked", self.on_button2_clicked)
         self.box.pack_start(self.button2, True, True, 0)
-
-        self.button3 = Gtk.Button(label="Stop")
-        self.button3.connect("clicked", self.on_button3_clicked)
-        self.box.pack_start(self.button3, True, True, 0)
+        self.playing = True
+        
+        #self.set_title(str(self.svc.action('get_transport_info','')))
+        print "Test!"
+        print str(self.svc.action('get_transport_info',''))
 
     def on_button1_clicked(self, widget):
-        self.svc.action('play','')
+
+        if self.playing is True:
+            self.svc.action('pause','')
+            self.button1.set_label("Play")
+            self.playing = False
+        else:
+            self.svc.action('play','')
+            self.button1.set_label("Pause")
+            self.playing = True
+
 
     def on_button2_clicked(self, widget):
-        self.svc.action('pause','')
-
-    def on_button3_clicked(self, widget):
         self.svc.action('stop','')
+        self.destroy()
 
 
 class CoherencePlayExtension(Caja.MenuProvider, GObject.GObject):
@@ -113,7 +121,7 @@ class CoherencePlayExtension(Caja.MenuProvider, GObject.GObject):
                 for service in device['services']:
                     service_type = service.split('/')[-1]
                     if service_type == 'AVTransport':
-                        item.connect('activate', self.play,service, device['path'], files)
+                        item.connect('activate', self.play,service, device['path'], files, device['friendly_name'])
                         break
                 submenu.append_item(item)
                 i += 1
@@ -123,7 +131,7 @@ class CoherencePlayExtension(Caja.MenuProvider, GObject.GObject):
 
         return menuitem,
 
-    def play(self,menu,service,uuid,files):
+    def play(self,menu,service,uuid,files,fname):
         print "play",uuid,service,files
         #pin = self.coherence.get_pin('Caja::MediaServer::%d'%os.getpid())
         #if pin == 'Coherence::Pin::None':
@@ -143,7 +151,7 @@ class CoherencePlayExtension(Caja.MenuProvider, GObject.GObject):
         s.action('stop','')
         s.action('set_av_transport_uri',{'current_uri':uri})
         s.action('play','')
-        win = DLNAControllerWindow(s)
+        win = DLNAControllerWindow(s,fname)
         win.connect("delete-event", Gtk.main_quit)
         win.show_all()
         Gtk.main()
