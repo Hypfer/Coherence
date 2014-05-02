@@ -66,13 +66,13 @@ class DLNAControllerWindow(Gtk.Window):
         table.attach(self.button2, 1, 2, 1, 2)
         self.playing = True
 
-        self.label1 = Gtk.Label(str(file))
+        self.label1 = Gtk.Label(str(os.path.basename(file)))
         table.attach(self.label1, 0, 2, 0, 1)
 
         self.progressbar = Gtk.ProgressBar()
         table.attach(self.progressbar, 0, 2, 2, 3)        
         #self.progressbar.set_fraction(0.0)
-        self.grace_period = 30
+        self.grace_period = 5
 
         GLib.timeout_add_seconds(1, self.checkprogress)
 
@@ -121,13 +121,16 @@ class DLNAControllerWindow(Gtk.Window):
             else:
                 return True
         else:
+            print("Closed")
+            self.destroy()
             return False
 
 
     def on_delete_event(event, self, widget):
         print("Closed")
+        self.svc.action('stop','')
         self.grace_period = 0
-        Gtk.main_quit()
+        self.destroy()
         return False
 
 
@@ -203,10 +206,10 @@ class CoherencePlayExtension(Caja.MenuProvider, GObject.GObject):
 
         uri = self.coherence.create_oob(file)
 
-        print uri
+        #print uri
 
         s = self.bus.get_object(BUS_NAME+'.service',service)
-        print s
+        #print s
         
         s.action('stop','')
         s.action('set_av_transport_uri',{'current_uri':uri})
