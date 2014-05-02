@@ -19,6 +19,9 @@
 import os
 import time
 
+
+import mimetypes
+
 import pygtk
 pygtk.require("2.0")
 
@@ -93,6 +96,8 @@ class CoherencePlayExtension(Caja.MenuProvider, GObject.GObject):
         self.coherence = self.bus.get_object(BUS_NAME,OBJECT_PATH)
 
     def get_file_items(self, window, files):
+        # Pictures are currently unsupported. They don't work for unknown reasons
+        filetypewhitelist = ['video/mp4','video/x-ms-wmv','video/x-msvideo','video/x-m4v','video/x-matroska','audio/ogg','audio/x-wav','audio/mpeg']
         if self.coherence == None:
             return
         if len(files) == 0:
@@ -100,6 +105,13 @@ class CoherencePlayExtension(Caja.MenuProvider, GObject.GObject):
 
         for file in files:
             if file.is_directory() or file.get_uri_scheme() != 'file':
+                return
+
+        for file in files:
+            
+            if mimetypes.guess_type(file.get_uri())[0] not in filetypewhitelist:
+                print mimetypes.guess_type(file.get_uri())
+                print "Not in List"
                 return
 
         #pin = self.coherence.get_pin('Caja::MediaServer::%d'%os.getpid())
