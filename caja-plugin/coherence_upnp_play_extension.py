@@ -19,9 +19,12 @@
 import os
 import time
 
+import pygtk
+pygtk.require("2.0")
+
 from urllib import unquote
 
-from gi.repository import Caja, GObject, Gio
+from gi.repository import Caja, GObject, Gio, Gtk
 
 import dbus
 from dbus.mainloop.glib import DBusGMainLoop
@@ -31,6 +34,41 @@ import dbus.service
 # dbus defines
 BUS_NAME = 'org.Coherence'
 OBJECT_PATH = '/org/Coherence'
+
+class DLNAControllerWindow(Gtk.Window,):
+
+    def __init__(self, svc):
+        Gtk.Window.__init__(self, title=svc)
+        
+        #the "s" device
+        self.svc = svc
+
+
+        #Gtk.Box in GTK3
+        self.box = Gtk.HBox(spacing=6)
+        self.add(self.box)
+
+        self.button1 = Gtk.Button(label="Play")
+        self.button1.connect("clicked", self.on_button1_clicked)
+        self.box.pack_start(self.button1, True, True, 0)
+
+        self.button2 = Gtk.Button(label="Pause")
+        self.button2.connect("clicked", self.on_button2_clicked)
+        self.box.pack_start(self.button2, True, True, 0)
+
+        self.button3 = Gtk.Button(label="Stop")
+        self.button3.connect("clicked", self.on_button3_clicked)
+        self.box.pack_start(self.button3, True, True, 0)
+
+    def on_button1_clicked(self, widget):
+        self.svc.action('play','')
+
+    def on_button2_clicked(self, widget):
+        self.svc.action('pause','')
+
+    def on_button3_clicked(self, widget):
+        self.svc.action('stop','')
+
 
 class CoherencePlayExtension(Caja.MenuProvider, GObject.GObject):
 
@@ -101,6 +139,11 @@ class CoherencePlayExtension(Caja.MenuProvider, GObject.GObject):
 
         s = self.bus.get_object(BUS_NAME+'.service',service)
         print s
+        
         s.action('stop','')
         s.action('set_av_transport_uri',{'current_uri':uri})
         s.action('play','')
+        win = DLNAControllerWindow(s)
+        win.connect("delete-event", Gtk.main_quit)
+        win.show_all()
+        Gtk.main()
