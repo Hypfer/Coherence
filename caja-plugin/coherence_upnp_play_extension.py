@@ -112,6 +112,7 @@ class DLNAControllerWindow(Gtk.Window):
             percent = delta_time.total_seconds() / totalseconds
 
         self.progressbar.set_fraction(1 - percent)
+        self.progressbar.set_text(str(position_info.items()[0][1]) + " / " + str(position_info.items()[2][1]))
 
         if self.grace_period != 0:
             if str(position_info.items()[2][1]) == '00:00:00':
